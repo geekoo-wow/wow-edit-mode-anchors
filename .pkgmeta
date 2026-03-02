@@ -1,5 +1,7 @@
 package-as: EditModeAnchors
 
+enable-nolib-creation: no
+
 ignore:
   - .gitignore
   - .gitmodules
