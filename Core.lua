@@ -1,10 +1,10 @@
--- HyperEditMode: Precise anchor point control for Edit Mode frames
+-- EditModeAnchors: Precise anchor point control for Edit Mode frames
 -- TESTING INSTRUCTIONS:
--- 1. /hem debug  -> enables verbose logging
+-- 1. /ema debug  -> enables verbose logging
 -- 2. Enter Edit Mode, select any frame
 -- 3. The "Anchor Override" section appears below the native settings dialog
 -- 4. Change any value -> frame repositions immediately
--- 5. Check chat for [HEM] logs showing anchorInfo before/after
+-- 5. Check chat for [EMA] logs showing anchorInfo before/after
 -- 6. Click "Save Changes" in Edit Mode
 -- 7. /reload
 -- 8. Re-enter Edit Mode, select the same frame
@@ -26,18 +26,18 @@ local function Log(msg, ...)
 	if select("#", ...) > 0 then
 		formatted = string.format(msg, ...)
 	end
-	DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[HEM]|r " .. formatted)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[EMA]|r " .. formatted)
 end
 
-SLASH_HYPEREDITMODEHEM1 = "/hem"
-SlashCmdList["HYPEREDITMODEHEM"] = function(msg)
+SLASH_HYPEREDITMODEEMA1 = "/ema"
+SlashCmdList["HYPEREDITMODEEMA"] = function(msg)
 	local cmd = strtrim(msg):lower()
 	if cmd == "debug" then
 		debugEnabled = not debugEnabled
-		DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[HEM]|r Debug logging " .. (debugEnabled and "|cff00ff00enabled|r" or "|cffff0000disabled|r"))
+		DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[EMA]|r Debug logging " .. (debugEnabled and "|cff00ff00enabled|r" or "|cffff0000disabled|r"))
 	else
-		DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[HEM]|r HyperEditMode commands:")
-		DEFAULT_CHAT_FRAME:AddMessage("  /hem debug  - Toggle debug logging")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[EMA]|r EditModeAnchors commands:")
+		DEFAULT_CHAT_FRAME:AddMessage("  /ema debug  - Toggle debug logging")
 	end
 end
 
@@ -419,6 +419,4 @@ RegisterSystemsWithIndices()
 RegisterSimpleSystems()
 RegisterStatusTrackingBars()
 
-Log("HyperEditMode loaded. Type /hem debug to enable debug logging.")
--- Always print a load message (even without debug)
-DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[HEM]|r HyperEditMode v0.1.0 loaded. Use |cff00ff00/hem debug|r for verbose logging.")
+Log("EditModeAnchors loaded. Type /ema debug to enable debug logging.")
