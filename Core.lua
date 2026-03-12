@@ -348,6 +348,22 @@ local function RegisterSystemsWithIndices()
 	if Enum.EditModeUnitFrameSystemIndices then
 		RegisterSubSystems(Enum.EditModeSystem.UnitFrame, Enum.EditModeUnitFrameSystemIndices)
 	end
+
+	if Enum.EditModeCooldownViewerSystemIndices then
+		RegisterSubSystems(Enum.EditModeSystem.CooldownViewer, Enum.EditModeCooldownViewerSystemIndices)
+	end
+
+	if Enum.EditModeEncounterEventsSystemIndices then
+		RegisterSubSystems(Enum.EditModeSystem.EncounterEvents, Enum.EditModeEncounterEventsSystemIndices)
+	end
+
+	if Enum.EditModeAuraFrameSystemIndices then
+		RegisterSubSystems(Enum.EditModeSystem.AuraFrame, Enum.EditModeAuraFrameSystemIndices)
+	end
+
+	if Enum.EditModeStatusTrackingBarSystemIndices then
+		RegisterSubSystems(Enum.EditModeSystem.StatusTrackingBar, Enum.EditModeStatusTrackingBarSystemIndices)
+	end
 end
 
 -- Simple systems (no sub-indices) -- register with subSystemID = nil
@@ -357,7 +373,6 @@ local function RegisterSimpleSystems()
 		Enum.EditModeSystem.Minimap,
 		Enum.EditModeSystem.EncounterBar,
 		Enum.EditModeSystem.ExtraAbilities,
-		Enum.EditModeSystem.AuraFrame,
 		Enum.EditModeSystem.TalkingHeadFrame,
 		Enum.EditModeSystem.ChatFrame,
 		Enum.EditModeSystem.VehicleLeaveButton,
@@ -370,25 +385,12 @@ local function RegisterSimpleSystems()
 		Enum.EditModeSystem.TimerBars,
 		Enum.EditModeSystem.VehicleSeatIndicator,
 		Enum.EditModeSystem.ArchaeologyBar,
-	}
-
-	-- Newer systems that may not exist on all versions
-	local optionalSystems = {
-		"CooldownViewer",
-		"PersonalResourceDisplay",
-		"EncounterEvents",
-		"DamageMeter",
+		Enum.EditModeSystem.PersonalResourceDisplay,
+		Enum.EditModeSystem.DamageMeter
 	}
 
 	for _, systemID in ipairs(simpleSystems) do
 		SafeRegister(systemID, nil)
-	end
-
-	for _, name in ipairs(optionalSystems) do
-		local systemID = Enum.EditModeSystem[name]
-		if systemID then
-			SafeRegister(systemID, nil)
-		end
 	end
 end
 
