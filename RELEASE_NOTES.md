@@ -1,3 +1,10 @@
+# EditModeAnchors 1.0.1
+## Midnight
+### Fixes
+- Minor fixes.
+- Remove chat hint about debug.
+- Remove references to old name (HyperEditMode)
+
 # EditModeAnchors 0.1.0-alpha
 ## Midnight
 ### New
