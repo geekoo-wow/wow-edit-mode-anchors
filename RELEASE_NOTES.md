@@ -1,3 +1,8 @@
+# EditModeAnchors 1.1.0
+## Midnight
+### Fixes
+- Now works for systems that have sub systems (eg. new cooldown manager stuff) - Thanks to Pingumania for the PR.
+
 # EditModeAnchors 1.0.1
 ## Midnight
 ### Fixes
