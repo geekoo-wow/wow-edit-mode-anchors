@@ -137,25 +137,30 @@ local function ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint
 		tostring(info.point), tostring(info.relativeTo), tostring(info.relativePoint),
 		tonumber(info.offsetX) or 0, tonumber(info.offsetY) or 0)
 
-	-- Reposition the frame using Blizzard's own method
-	-- ApplySystemAnchor reads from anchorInfo and calls SetPoint
-	local ok, err = pcall(function()
-		systemFrame:ApplySystemAnchor()
+	-- Defer the frame update to a new execution context so that our tainted
+	-- writes to anchorInfo don't propagate through Blizzard's CompactUnitFrame
+	-- update chain (which would taint health-bar colour locals and error out).
+	C_Timer.After(0, function()
+		-- Reposition the frame using Blizzard's own method
+		-- ApplySystemAnchor reads from anchorInfo and calls SetPoint
+		local ok, err = pcall(function()
+			systemFrame:ApplySystemAnchor()
+		end)
+
+		if ok then
+			Log("ApplyAnchorOverride: ApplySystemAnchor() succeeded")
+		else
+			Log("ApplyAnchorOverride: ApplySystemAnchor() FAILED: %s", tostring(err))
+		end
+
+		-- Mark the system as having active (unsaved) changes
+		systemFrame:SetHasActiveChanges(true)
+
+		-- Update the native settings dialog if it's showing this system
+		if EditModeSystemSettingsDialog and EditModeSystemSettingsDialog.attachedToSystem == systemFrame then
+			EditModeSystemSettingsDialog:UpdateDialog(systemFrame)
+		end
 	end)
-
-	if ok then
-		Log("ApplyAnchorOverride: ApplySystemAnchor() succeeded")
-	else
-		Log("ApplyAnchorOverride: ApplySystemAnchor() FAILED: %s", tostring(err))
-	end
-
-	-- Mark the system as having active (unsaved) changes
-	systemFrame:SetHasActiveChanges(true)
-
-	-- Update the native settings dialog if it's showing this system
-	if EditModeSystemSettingsDialog and EditModeSystemSettingsDialog.attachedToSystem == systemFrame then
-		EditModeSystemSettingsDialog:UpdateDialog(systemFrame)
-	end
 end
 
 -------------------------------------------------------------------------------
