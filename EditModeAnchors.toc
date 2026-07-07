@@ -1,4 +1,4 @@
-## Interface: 120005
+## Interface: 120007
 ## Title: Edit Mode Anchors
 ## Notes: Precise anchor point control for Edit Mode frames
 ## Author: geekoo
