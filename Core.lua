@@ -9,8 +9,9 @@
 -- 7. /reload
 -- 8. Re-enter Edit Mode, select the same frame
 -- 9. Check if your custom anchor values persisted in the dropdowns/sliders
--- 10. If values reverted to TOPLEFT/UIParent after reload, then C_EditMode.SaveLayouts
---     strips custom relativeTo values and we need to add SavedVariables as a backup.
+-- 10. Party/Raid (and Boss/Arena) frames are special: Blizzard re-anchors them to
+--     UIParent on every save (see "Save-time anchor preservation" below), so verify
+--     those specifically survive a Save + /reload cycle.
 
 local _, ns = ...
 local LEM = ns.LibEditMode
@@ -103,6 +104,8 @@ local function GetAnchorInfo(systemFrame)
 	return nil
 end
 
+local SnapshotFrameAnchor -- forward-declared, defined in "Save-time anchor preservation"
+
 -- Apply an anchor override: write to anchorInfo, reposition the frame, mark dirty.
 local function ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint, offsetX, offsetY)
 	if not systemFrame or not systemFrame.systemInfo then
@@ -137,6 +140,10 @@ local function ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint
 		tostring(info.point), tostring(info.relativeTo), tostring(info.relativePoint),
 		tonumber(info.offsetX) or 0, tonumber(info.offsetY) or 0)
 
+	-- Remember this as a user-intended anchor so it survives Blizzard's save-time
+	-- re-anchoring of Party/Raid/Boss/Arena frames (see below).
+	SnapshotFrameAnchor(systemFrame, true)
+
 	-- Defer the frame update to a new execution context so that our tainted
 	-- writes to anchorInfo don't propagate through Blizzard's CompactUnitFrame
 	-- update chain (which would taint health-bar colour locals and error out).
@@ -161,6 +168,174 @@ local function ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint
 			EditModeSystemSettingsDialog:UpdateDialog(systemFrame)
 		end
 	end)
+end
+
+-------------------------------------------------------------------------------
+-- Save-time anchor preservation
+--
+-- Blizzard's EditModeSystemMixin:PrepareForSave() runs at the start of every
+-- EditModeManagerFrame:SaveLayouts() (Save Changes button, but also layout
+-- create/rename/delete) and deliberately re-anchors frames to UIParent before
+-- the layout is serialized:
+--   * frames flagged `alwaysUseTopLeftAnchor`/`alwaysUseTopRightAnchor`
+--     (PartyFrame, CompactRaidFrameContainer, Boss and Arena enemy frames)
+--     get BreakFrameSnap()'d, which rewrites systemInfo.anchorInfo to a plain
+--     TOPLEFT/TOPRIGHT-of-UIParent anchor so the container grows from a
+--     stable corner as it resizes
+--   * frames flagged `breakSnappedFramesOnSave` (the above plus the
+--     ObjectiveTracker) additionally break the anchor of every frame snapped
+--     *to* them
+-- The frame doesn't visibly move, but the anchor relationship is destroyed,
+-- which is why Party/Raid overrides always come back as UIParent after a
+-- Save + /reload.
+--
+-- We keep a snapshot of the last user-intended anchor per system frame and
+-- write it back after PrepareSystemsForSave() has clobbered it, right before
+-- C_EditMode.SaveLayouts() serializes the layout. Native repositioning (drag,
+-- arrow keys, reset to default) refreshes the snapshot as "not custom" so we
+-- never fight Blizzard over frames the user positions natively.
+-------------------------------------------------------------------------------
+
+local anchorSnapshots = {} -- [systemFrame] = { custom, anchorInfo, anchorInfo2 }
+local pendingReapply = {}  -- [systemFrame] = true for frames restored during the current save
+
+local function CopyAnchor(info)
+	if not info then return nil end
+	return {
+		point = info.point,
+		relativeTo = info.relativeTo,
+		relativePoint = info.relativePoint,
+		offsetX = info.offsetX,
+		offsetY = info.offsetY,
+	}
+end
+
+local function AnchorsEqual(a, b)
+	if not a or not b then
+		return a == b
+	end
+	return a.point == b.point
+		and a.relativeTo == b.relativeTo
+		and a.relativePoint == b.relativePoint
+		and math.abs((a.offsetX or 0) - (b.offsetX or 0)) < 0.1
+		and math.abs((a.offsetY or 0) - (b.offsetY or 0)) < 0.1
+end
+
+-- The anchor shape BreakFrameSnap() forces onto a frame at save time.
+local function IsForcedAnchorShape(frame, info)
+	local point = frame.alwaysUseTopRightAnchor and "TOPRIGHT" or "TOPLEFT"
+	return info.point == point and info.relativePoint == point and info.relativeTo == "UIParent"
+end
+
+-- Whether a loaded anchor could have been produced by Blizzard's own save
+-- path. If it couldn't, it must have been written by an addon and should keep
+-- surviving future saves (this is what makes overrides persist across
+-- sessions without SavedVariables).
+local function IsNativeSavedAnchor(frame, info)
+	if frame.alwaysUseTopLeftAnchor or frame.alwaysUseTopRightAnchor then
+		return IsForcedAnchorShape(frame, info)
+	end
+
+	-- Anchors targeting a frame that breaks its snapped frames on save never
+	-- survive a native save, so they can only have come from an addon.
+	local relativeTo = info.relativeTo and _G[info.relativeTo]
+	return not (relativeTo and relativeTo.breakSnappedFramesOnSave)
+end
+
+function SnapshotFrameAnchor(systemFrame, isCustom) -- forward-declared above
+	local systemInfo = systemFrame.systemInfo
+	if not systemInfo or not systemInfo.anchorInfo then return end
+
+	anchorSnapshots[systemFrame] = {
+		custom = isCustom and not systemInfo.isInDefaultPosition or false,
+		anchorInfo = CopyAnchor(systemInfo.anchorInfo),
+		anchorInfo2 = CopyAnchor(systemInfo.anchorInfo2),
+	}
+end
+
+-- Layout loaded/switched/reverted: re-derive the snapshot from the data.
+local function OnSystemUpdated(systemFrame)
+	local systemInfo = systemFrame.systemInfo
+	if not systemInfo or not systemInfo.anchorInfo then return end
+	SnapshotFrameAnchor(systemFrame, not IsNativeSavedAnchor(systemFrame, systemInfo.anchorInfo))
+end
+
+-- Drag / arrow keys / reset to default: the user repositioned the frame
+-- natively, so stop protecting the old override.
+local function OnNativeReposition(systemFrame)
+	local snapshot = anchorSnapshots[systemFrame]
+	local systemInfo = systemFrame.systemInfo
+	if snapshot and snapshot.custom and systemInfo and AnchorsEqual(systemInfo.anchorInfo, snapshot.anchorInfo) then
+		return -- nothing actually moved (e.g. a no-op drag on a locked frame)
+	end
+	SnapshotFrameAnchor(systemFrame, false)
+end
+
+local function RestoreClobberedAnchors()
+	for systemFrame, snapshot in pairs(anchorSnapshots) do
+		local systemInfo = systemFrame.systemInfo
+		if snapshot.custom
+			and systemInfo and systemInfo.anchorInfo
+			and not systemInfo.isInDefaultPosition
+			and IsForcedAnchorShape(systemFrame, systemInfo.anchorInfo) -- only ever undo PrepareForSave's rewrite
+			and not AnchorsEqual(systemInfo.anchorInfo, snapshot.anchorInfo) then
+
+			Log("Save clobbered %s, restoring anchor: point=%s relativeTo=%s relativePoint=%s",
+				systemFrame:GetName() or "?", tostring(snapshot.anchorInfo.point),
+				tostring(snapshot.anchorInfo.relativeTo), tostring(snapshot.anchorInfo.relativePoint))
+
+			systemInfo.anchorInfo = CopyAnchor(snapshot.anchorInfo)
+			systemInfo.anchorInfo2 = CopyAnchor(snapshot.anchorInfo2)
+			pendingReapply[systemFrame] = true
+		end
+	end
+end
+
+-- After the save went through, re-apply the restored anchors so the frames
+-- are actually SetPoint'ed to their targets again for the rest of the session
+-- (BreakFrameSnap left them pinned to UIParent; the position is identical but
+-- the frame would no longer follow its anchor target). Deferred to a fresh
+-- execution context to keep our tainted writes out of Blizzard's save path.
+local function ReapplyRestoredAnchors()
+	if not next(pendingReapply) then return end
+	local frames = pendingReapply
+	pendingReapply = {}
+
+	C_Timer.After(0, function()
+		for systemFrame in pairs(frames) do
+			if not InCombatLockdown() then
+				local ok, err = pcall(function()
+					systemFrame:ApplySystemAnchor()
+				end)
+				if not ok then
+					Log("ReapplyRestoredAnchors: ApplySystemAnchor() FAILED for %s: %s",
+						systemFrame:GetName() or "?", tostring(err))
+				end
+			end
+		end
+	end)
+end
+
+local function InstallSaveHooks()
+	if not EditModeManagerFrame or not EditModeManagerFrame.registeredSystemFrames then
+		Log("InstallSaveHooks: EditModeManagerFrame not ready, save-time preservation disabled!")
+		return
+	end
+
+	for _, systemFrame in ipairs(EditModeManagerFrame.registeredSystemFrames) do
+		hooksecurefunc(systemFrame, "UpdateSystem", OnSystemUpdated)
+		hooksecurefunc(systemFrame, "OnDragStop", OnNativeReposition)
+		hooksecurefunc(systemFrame, "ProcessMovementKey", OnNativeReposition)
+		hooksecurefunc(systemFrame, "ResetToDefaultPosition", OnNativeReposition)
+		OnSystemUpdated(systemFrame) -- layouts may have loaded before this addon
+	end
+
+	-- PrepareSystemsForSave() runs first inside SaveLayouts(); this hook fires
+	-- right after it and before C_EditMode.SaveLayouts() serializes the data.
+	hooksecurefunc(EditModeManagerFrame, "PrepareSystemsForSave", RestoreClobberedAnchors)
+
+	-- Fired by SaveLayouts() right after C_EditMode.SaveLayouts().
+	EventRegistry:RegisterCallback("EditMode.SavedLayouts", ReapplyRestoredAnchors)
 end
 
 -------------------------------------------------------------------------------
@@ -425,5 +600,6 @@ end
 RegisterSystemsWithIndices()
 RegisterSimpleSystems()
 RegisterStatusTrackingBars()
+InstallSaveHooks()
 
 Log("EditModeAnchors loaded. Type /ema debug to enable debug logging.")
