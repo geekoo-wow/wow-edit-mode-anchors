@@ -1,3 +1,10 @@
+# EditModeAnchors 1.1.4
+## Midnight
+### Fixes
+- Party/Raid (and Boss/Arena) unit frame anchor overrides no longer revert to UIParent after saving Edit Mode changes. Blizzard's Edit Mode forces these frames back to a UIParent-relative anchor on every save; the addon now detects and restores custom anchors immediately after.
+### Known Issues
+- Documented that using Edit Mode's Share > Copy to Clipboard feature after changing an anchor override can trigger a "blocked from an action only available to the Blizzard UI" error, along with the workaround. See the README for details.
+
 # EditModeAnchors 1.1.0
 ## Midnight
 ### Fixes
