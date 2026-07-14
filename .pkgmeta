@@ -3,6 +3,7 @@ package-as: EditModeAnchors
 enable-nolib-creation: no
 
 ignore:
+  - .github
   - .gitignore
   - .gitmodules
   - .pkgmeta
