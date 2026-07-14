@@ -5,7 +5,7 @@
 ## Version: @project-version@
 ## Category: User Interface
 ## Dependencies: Blizzard_EditMode
-## X-CurseForge-Project-ID: 1475567
+## X-Curse-Project-ID: 1475567
 
 Libs\LibEditMode\namespaced.lua
 Libs\LibEditMode\embed.xml
