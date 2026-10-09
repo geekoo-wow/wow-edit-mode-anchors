@@ -1,4 +1,6 @@
-## Interface: 120000, 120001, 120005, 120007, 120100
+## Interface: 16001, 120000, 120001, 120005, 120007, 120100
+## Interface-Retail: 120000, 120001, 120005, 120007, 120100
+## Interface-Forever: 16001
 ## Title: Edit Mode Anchors
 ## Notes: Precise anchor point control for Edit Mode frames
 ## Author: geekoo
