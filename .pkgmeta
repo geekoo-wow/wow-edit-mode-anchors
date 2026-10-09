@@ -17,7 +17,7 @@ ignore:
 externals:
   Libs/LibEditMode:
     url: https://github.com/p3lim-wow/LibEditMode.git
-    tag: 15
+    tag: 18
 
 manual-changelog:
   filename: RELEASE_NOTES.md
