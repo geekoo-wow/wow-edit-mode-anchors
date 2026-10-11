@@ -3,7 +3,9 @@
 -- 1. /ema debug  -> enables verbose logging
 -- 2. Enter Edit Mode, select any frame
 -- 3. The "Anchor Override" section appears below the native settings dialog
--- 4. Change any value -> frame repositions immediately
+-- 4. Change any value -> frame repositions immediately. Changing Point /
+--    Relative To / Relative Point keeps the frame where it is on screen and
+--    recomputes the Offset X/Y sliders; only the sliders (and dragging) move it.
 -- 5. Check chat for [EMA] logs showing anchorInfo before/after
 -- 6. Click "Save Changes" in Edit Mode
 -- 7. /reload
@@ -168,6 +170,88 @@ local function ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint
 			EditModeSystemSettingsDialog:UpdateDialog(systemFrame)
 		end
 	end)
+end
+
+-------------------------------------------------------------------------------
+-- Position-preserving anchor changes
+--
+-- Re-anchoring a frame while keeping its stored offsets would make it jump to
+-- wherever those offsets land under the new anchor. When the user changes the
+-- point, target or relative point we instead derive offsets that reproduce the
+-- frame's current on-screen position, so only drags and explicit offset edits
+-- actually move frames.
+-------------------------------------------------------------------------------
+
+-- Horizontal / vertical fraction of a frame's rect each anchor point sits at.
+local POINT_FRACTIONS = {
+	TOPLEFT = { 0, 1 },    TOP = { 0.5, 1 },      TOPRIGHT = { 1, 1 },
+	LEFT = { 0, 0.5 },     CENTER = { 0.5, 0.5 }, RIGHT = { 1, 0.5 },
+	BOTTOMLEFT = { 0, 0 }, BOTTOM = { 0.5, 0 },   BOTTOMRIGHT = { 1, 0 },
+}
+
+-- Absolute screen position of a named anchor point on a frame. GetRect()
+-- reports in the frame's own scaled units, so multiply by the effective scale
+-- to get a coordinate space shared by frames with different scales.
+-- Returns nil when the frame has no resolvable rect.
+local function GetPointPosition(frame, point)
+	local fractions = POINT_FRACTIONS[point]
+	if not fractions then return nil end
+
+	local left, bottom, width, height = frame:GetRect()
+	if not left then return nil end
+
+	local scale = frame:GetEffectiveScale()
+	return (left + width * fractions[1]) * scale, (bottom + height * fractions[2]) * scale
+end
+
+-- Offsets that keep `frame` exactly where it is on screen once `point` is
+-- anchored to `relativePoint` of the frame named `relativeTo`. SetPoint offsets
+-- are expressed in the anchored frame's own scale. Returns nil when either rect
+-- can't be resolved.
+local function ComputePreservingOffsets(frame, point, relativeTo, relativePoint)
+	local target = relativeTo and _G[relativeTo]
+	if type(target) ~= "table" or not target.GetRect then return nil end
+
+	local frameX, frameY = GetPointPosition(frame, point)
+	local targetX, targetY = GetPointPosition(target, relativePoint)
+	if not frameX or not targetX then return nil end
+
+	local scale = frame:GetEffectiveScale()
+	return (frameX - targetX) / scale, (frameY - targetY) / scale
+end
+
+-- LibEditMode's slider widgets only read their value when the settings panel
+-- is built (their Refresh() just updates enabled/hidden state), so after
+-- recomputing offsets the panel has to be rebuilt for the Offset X/Y sliders
+-- to show the new values. Deferred because rebuilding releases the dropdown
+-- widget that is still inside its own click handler.
+local function RefreshExtensionPanel(systemFrame)
+	local extension = LEM.internal and LEM.internal.extension
+	if not extension then return end
+
+	C_Timer.After(0, function()
+		if extension:IsShown() and GetSystemFrame(extension.systemID, extension.subSystemID) == systemFrame then
+			extension:Update(extension.systemID, extension.subSystemID)
+		end
+	end)
+end
+
+-- Re-anchor a frame without moving it, then refresh the offset sliders.
+local function ApplyAnchorKeepingPosition(systemFrame, point, relativeTo, relativePoint)
+	local info = GetAnchorInfo(systemFrame)
+	if not info then return end
+
+	local offsetX, offsetY = ComputePreservingOffsets(systemFrame, point, relativeTo, relativePoint)
+	if offsetX then
+		Log("Preserving position: offsets %.1f, %.1f -> %.1f, %.1f",
+			tonumber(info.offsetX) or 0, tonumber(info.offsetY) or 0, offsetX, offsetY)
+	else
+		Log("Preserving position: could not resolve rects, keeping existing offsets")
+		offsetX, offsetY = info.offsetX, info.offsetY
+	end
+
+	ApplyAnchorOverride(systemFrame, point, relativeTo, relativePoint, offsetX, offsetY)
+	RefreshExtensionPanel(systemFrame)
 end
 
 -------------------------------------------------------------------------------
@@ -376,7 +460,7 @@ local function CreateAnchorSettings(systemID, subSystemID)
 				local frame = GetSystemFrame(systemID, subSystemID)
 				local info = GetAnchorInfo(frame)
 				if info then
-					ApplyAnchorOverride(frame, value, info.relativeTo, info.relativePoint, info.offsetX, info.offsetY)
+					ApplyAnchorKeepingPosition(frame, value, info.relativeTo, info.relativePoint)
 				end
 			end,
 		},
@@ -403,7 +487,7 @@ local function CreateAnchorSettings(systemID, subSystemID)
 				local frame = GetSystemFrame(systemID, subSystemID)
 				local info = GetAnchorInfo(frame)
 				if info then
-					ApplyAnchorOverride(frame, info.point, value, info.relativePoint, info.offsetX, info.offsetY)
+					ApplyAnchorKeepingPosition(frame, info.point, value, info.relativePoint)
 				end
 			end,
 		},
@@ -429,7 +513,7 @@ local function CreateAnchorSettings(systemID, subSystemID)
 				local frame = GetSystemFrame(systemID, subSystemID)
 				local info = GetAnchorInfo(frame)
 				if info then
-					ApplyAnchorOverride(frame, info.point, info.relativeTo, value, info.offsetX, info.offsetY)
+					ApplyAnchorKeepingPosition(frame, info.point, info.relativeTo, value)
 				end
 			end,
 		},

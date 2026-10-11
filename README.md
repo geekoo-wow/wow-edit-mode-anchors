@@ -10,6 +10,7 @@ No more dragging frames by hand and hoping they line up—this addon introduces 
 
 *   **Precise Offset Controls:** Fine-tune your X/Y coordinates using input boxes or increment buttons. Move frames 1 pixel at a time for that flawless look.
 *   **Advanced Anchor Management:** Choose specific attachment points (e.g., Top-Left to Bottom-Right) to create complex layouts that stay put.
+*   **Re-anchor Without Moving:** Changing a frame's anchor point, target, or relative point keeps it exactly where it is on screen; the offsets are recalculated for you. Only dragging a frame or editing its offsets moves it.
 *   **Native Integration:** Designed to feel like a part of the game. The tools appear directly within the standard Edit Mode selection flyouts.
 
 ## Known Issues
