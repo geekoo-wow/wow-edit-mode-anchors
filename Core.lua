@@ -14,6 +14,8 @@
 -- 10. Party/Raid (and Boss/Arena) frames are special: Blizzard re-anchors them to
 --     UIParent on every save (see "Save-time anchor preservation" below), so verify
 --     those specifically survive a Save + /reload cycle.
+-- 11. On WoW Forever, also check the systems that client adds: the Totem bar,
+--     the swing timers, the main action bar end caps and the Group Finder eye.
 
 local _, ns = ...
 local LEM = ns.LibEditMode
@@ -580,97 +582,78 @@ end
 
 -------------------------------------------------------------------------------
 -- Register Settings for All Edit Mode Systems
+--
+-- Systems are listed by name and resolved against Enum.EditModeSystem at load
+-- time, so a system the running client doesn't have is simply skipped. The set
+-- differs per client: retail and WoW Forever share most of it, Forever adds the
+-- swing timers, the main action bar end caps, the Group Finder eye and the
+-- gamepad action bar, and older builds lack the newer systems.
 -------------------------------------------------------------------------------
 
--- Helper: safely register settings for a system, guarding against nil enums
--- on older clients where some systems may not exist yet.
-local function SafeRegister(systemID, subSystemID)
-	if systemID == nil then return end
-	local settings = CreateAnchorSettings(systemID, subSystemID)
-	LEM:AddSystemSettings(systemID, settings, subSystemID)
+-- Register the anchor settings for one system (or one of its sub-systems).
+local function RegisterSystem(systemID, subSystemID)
+	LEM:AddSystemSettings(systemID, CreateAnchorSettings(systemID, subSystemID), subSystemID)
 	Log("Registered anchor settings for system=%s sub=%s", tostring(systemID), tostring(subSystemID))
 end
 
--- Helper: iterate an Enum table's values and register each as a sub-system.
-local function RegisterSubSystems(systemID, indicesEnum)
-	if not indicesEnum then return end
-	for name, index in pairs(indicesEnum) do
-		if type(index) == "number" then
-			SafeRegister(systemID, index)
+-- Systems whose frames are addressed by (system, systemIndex), with the Enum
+-- table that holds their indices. Every numeric value in it is registered.
+local SYSTEMS_WITH_INDICES = {
+	{ system = "ActionBar",           indices = "EditModeActionBarSystemIndices" },           -- bars 1-8, stance, pet, possess
+	{ system = "UnitFrame",           indices = "EditModeUnitFrameSystemIndices" },           -- player, target, focus, party, raid, boss, arena, pet
+	{ system = "AuraFrame",           indices = "EditModeAuraFrameSystemIndices" },           -- buffs, debuffs, external defensives
+	{ system = "StatusTrackingBar",   indices = "EditModeStatusTrackingBarSystemIndices" },   -- experience / reputation bars
+	{ system = "CooldownViewer",      indices = "EditModeCooldownViewerSystemIndices" },
+	{ system = "EncounterEvents",     indices = "EditModeEncounterEventsSystemIndices" },
+	{ system = "MainActionBarEndCap", indices = "EditModeMainActionBarEndCapSystemIndices" }, -- WoW Forever: left / right end caps
+	{ system = "SwingTimer",          indices = "EditModeSwingTimerSystemIndices" },          -- WoW Forever: main hand, off hand, ranged
+}
+
+-- Systems addressed by their system ID alone.
+local SIMPLE_SYSTEMS = {
+	"CastBar",
+	"Minimap",
+	"EncounterBar",
+	"ExtraAbilities",
+	"TalkingHeadFrame",
+	"ChatFrame",
+	"VehicleLeaveButton",
+	"LootFrame",
+	"HudTooltip",
+	"ObjectiveTracker",
+	"MicroMenu",
+	"Bags",
+	"DurabilityFrame",
+	"TimerBars",
+	"VehicleSeatIndicator",
+	"ArchaeologyBar",
+	"PersonalResourceDisplay",
+	"DamageMeter",
+	"RaidWarning",
+	"TotemActionBar",
+	"LossOfControl",
+	"GroupFinder",          -- WoW Forever: the Group Finder eye
+	"GamepadMainActionBar", -- WoW Forever: gamepad preset layout
+}
+
+local function RegisterAllSystems()
+	for _, entry in ipairs(SYSTEMS_WITH_INDICES) do
+		local systemID = Enum.EditModeSystem[entry.system]
+		local indicesEnum = Enum[entry.indices]
+		if systemID and indicesEnum then
+			for _, index in pairs(indicesEnum) do
+				if type(index) == "number" then
+					RegisterSystem(systemID, index)
+				end
+			end
 		end
 	end
-end
 
--- Systems that have sub-system indices
-local function RegisterSystemsWithIndices()
-	-- ActionBars have multiple sub-bars
-	if Enum.EditModeActionBarSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.ActionBar, Enum.EditModeActionBarSystemIndices)
-	end
-
-	-- UnitFrames have Player, Target, Focus, Party, Raid, Boss, Arena, Pet
-	if Enum.EditModeUnitFrameSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.UnitFrame, Enum.EditModeUnitFrameSystemIndices)
-	end
-
-	if Enum.EditModeCooldownViewerSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.CooldownViewer, Enum.EditModeCooldownViewerSystemIndices)
-	end
-
-	if Enum.EditModeEncounterEventsSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.EncounterEvents, Enum.EditModeEncounterEventsSystemIndices)
-	end
-
-	if Enum.EditModeAuraFrameSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.AuraFrame, Enum.EditModeAuraFrameSystemIndices)
-	end
-
-	if Enum.EditModeStatusTrackingBarSystemIndices then
-		RegisterSubSystems(Enum.EditModeSystem.StatusTrackingBar, Enum.EditModeStatusTrackingBarSystemIndices)
-	end
-end
-
--- Simple systems (no sub-indices) -- register with subSystemID = nil
-local function RegisterSimpleSystems()
-	local simpleSystems = {
-		Enum.EditModeSystem.CastBar,
-		Enum.EditModeSystem.Minimap,
-		Enum.EditModeSystem.EncounterBar,
-		Enum.EditModeSystem.ExtraAbilities,
-		Enum.EditModeSystem.TalkingHeadFrame,
-		Enum.EditModeSystem.ChatFrame,
-		Enum.EditModeSystem.VehicleLeaveButton,
-		Enum.EditModeSystem.LootFrame,
-		Enum.EditModeSystem.HudTooltip,
-		Enum.EditModeSystem.ObjectiveTracker,
-		Enum.EditModeSystem.MicroMenu,
-		Enum.EditModeSystem.Bags,
-		Enum.EditModeSystem.DurabilityFrame,
-		Enum.EditModeSystem.TimerBars,
-		Enum.EditModeSystem.VehicleSeatIndicator,
-		Enum.EditModeSystem.ArchaeologyBar,
-		Enum.EditModeSystem.PersonalResourceDisplay,
-		Enum.EditModeSystem.DamageMeter
-	}
-
-	for _, systemID in ipairs(simpleSystems) do
-		SafeRegister(systemID, nil)
-	end
-end
-
--- StatusTrackingBar is a special case -- it has sub-indices but they may not
--- be in a dedicated Enum table. Handle it by checking registered frames.
-local function RegisterStatusTrackingBars()
-	local systemID = Enum.EditModeSystem.StatusTrackingBar
-	if not systemID then return end
-
-	-- Check if there's a dedicated enum for sub-indices
-	if Enum.EditModeStatusTrackingBarSystemIndices then
-		RegisterSubSystems(systemID, Enum.EditModeStatusTrackingBarSystemIndices)
-	else
-		-- Fall back: register for known indices (0 = main bar, 1 = secondary bar)
-		SafeRegister(systemID, 0)
-		SafeRegister(systemID, 1)
+	for _, systemName in ipairs(SIMPLE_SYSTEMS) do
+		local systemID = Enum.EditModeSystem[systemName]
+		if systemID then
+			RegisterSystem(systemID, nil)
+		end
 	end
 end
 
@@ -681,9 +664,7 @@ end
 -- Register everything on addon load.
 -- LibEditMode handles the timing -- it will only show the extension panel
 -- when Edit Mode is active and a system frame is selected.
-RegisterSystemsWithIndices()
-RegisterSimpleSystems()
-RegisterStatusTrackingBars()
+RegisterAllSystems()
 InstallSaveHooks()
 
 Log("EditModeAnchors loaded. Type /ema debug to enable debug logging.")

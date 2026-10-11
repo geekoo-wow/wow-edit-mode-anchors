@@ -13,6 +13,17 @@ No more dragging frames by hand and hoping they line up—this addon introduces 
 *   **Re-anchor Without Moving:** Changing a frame's anchor point, target, or relative point keeps it exactly where it is on screen; the offsets are recalculated for you. Only dragging a frame or editing its offsets moves it.
 *   **Native Integration:** Designed to feel like a part of the game. The tools appear directly within the standard Edit Mode selection flyouts.
 
+## Supported Clients
+
+| Client | Interface |
+|---|---|
+| Retail (Midnight 12.x) | 120000, 120001, 120005, 120007, 120100 |
+| WoW Forever | 16001 |
+
+The repository has a single `EditModeAnchors.toc` with `## Interface-Retail:` and `## Interface-Forever:` lines; the release packager splits it into `EditModeAnchors_Mainline.toc` and `EditModeAnchors_Camelot.toc`, which each client picks by name. An unpackaged checkout still loads on both clients through the combined `## Interface:` line. After a client patch, get the new number with `/dump select(4, GetBuildInfo())` and add it to that client's line and to the base `## Interface:` line.
+
+On WoW Forever the Anchor Override controls also cover that client's own Edit Mode systems: the Totem bar, the swing timers, the main action bar end caps and the Group Finder eye. Classic flavors aren't supported.
+
 ## Known Issues
 
 ### "EditModeAnchors has been blocked from an action only available to the Blizzard UI" when sharing a layout
